@@ -62,19 +62,21 @@ namespace QuantConnect.Lean.Engine.Setup
                     .SubscriptionManager
                     .SubscriptionDataConfigService
                     .GetSubscriptionDataConfigs(cash.ConversionRateSecurity.Symbol,
-                        includeInternalConfigs:true);
-
-                var resolution = configs.GetHighestResolution();
-                var startTime = historyRequestFactory.GetStartTimeAlgoTz(
-                    cash.ConversionRateSecurity.Symbol,
-                    1,
-                    resolution,
-                    cash.ConversionRateSecurity.Exchange.Hours);
-                var endTime = algorithm.Time.RoundDown(resolution.ToTimeSpan());
+                        includeInternalConfigs: true);
 
                 // we need to order and select a specific configuration type
                 // so the conversion rate is deterministic
                 var configToUse = configs.OrderBy(x => x.TickType).First();
+                var hours = cash.ConversionRateSecurity.Exchange.Hours;
+
+                var resolution = configs.GetHighestResolution();
+                var startTime = historyRequestFactory.GetStartTimeAlgoTz(
+                    cash.ConversionRateSecurity.Symbol,
+                    10,
+                    resolution,
+                    hours,
+                    configToUse.DataTimeZone);
+                var endTime = algorithm.Time;
 
                 historyRequests.Add(historyRequestFactory.CreateHistoryRequest(
                     configToUse,
@@ -111,6 +113,38 @@ namespace QuantConnect.Lean.Engine.Setup
                 algorithmNodePacket.RamAllocation,
                 sleepIntervalMillis: 100,
                 workerThread: workerThread);
+        }
+
+        /// <summary>
+        /// Sets the initial cash for the algorithm if set in the job packet.
+        /// </summary>
+        /// <remarks>Should be called after initialize <see cref="LoadBacktestJobAccountCurrency"/></remarks>
+        public static void LoadBacktestJobCashAmount(IAlgorithm algorithm, BacktestNodePacket job)
+        {
+            // set initial cash, if present in the job
+            if (job.CashAmount.HasValue)
+            {
+                // Zero the CashBook - we'll populate directly from job
+                foreach (var kvp in algorithm.Portfolio.CashBook)
+                {
+                    kvp.Value.SetAmount(0);
+                }
+
+                algorithm.SetCash(job.CashAmount.Value.Amount);
+            }
+        }
+
+        /// <summary>
+        /// Sets the account currency the algorithm should use if set in the job packet
+        /// </summary>
+        /// <remarks>Should be called before initialize <see cref="LoadBacktestJobCashAmount"/></remarks>
+        public static void LoadBacktestJobAccountCurrency(IAlgorithm algorithm, BacktestNodePacket job)
+        {
+            // set account currency if present in the job
+            if (job.CashAmount.HasValue)
+            {
+                algorithm.SetAccountCurrency(job.CashAmount.Value.Currency);
+            }
         }
     }
 }

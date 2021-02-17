@@ -155,29 +155,24 @@ namespace QuantConnect
         /// <summary>
         /// Append the zip data to the file-entry specified.
         /// </summary>
-        /// <param name="path"></param>
-        /// <param name="entry"></param>
-        /// <param name="data"></param>
-        /// <returns></returns>
-        public static bool ZipCreateAppendData(string path, string entry, string data)
+        /// <param name="path">The zip file path</param>
+        /// <param name="entry">The entry name</param>
+        /// <param name="data">The entry data</param>
+        /// <param name="overrideEntry">True if should override entry if it already exists</param>
+        /// <returns>True on success</returns>
+        public static bool ZipCreateAppendData(string path, string entry, string data, bool overrideEntry = false)
         {
             try
             {
-                if (File.Exists(path))
+                using (var zip = File.Exists(path) ? ZipFile.Read(path) : new ZipFile(path))
                 {
-                    using (var zip = ZipFile.Read(path))
+                    if (zip.ContainsEntry(entry) && overrideEntry)
                     {
-                        zip.AddEntry(entry, data);
-                        zip.Save();
+                        zip.RemoveEntry(entry);
                     }
-                }
-                else
-                {
-                    using (var zip = new ZipFile(path))
-                    {
-                        zip.AddEntry(entry, data);
-                        zip.Save();
-                    }
+
+                    zip.AddEntry(entry, data);
+                    zip.Save();
                 }
             }
             catch (Exception err)
@@ -192,8 +187,9 @@ namespace QuantConnect
         /// Uncompress zip data byte array into a dictionary string array of filename-contents.
         /// </summary>
         /// <param name="zipData">Byte data array of zip compressed information</param>
+        /// <param name="encoding">Specifies the encoding used to read the bytes. If not specified, defaults to ASCII</param>
         /// <returns>Uncompressed dictionary string-sting of files in the zip</returns>
-        public static Dictionary<string, string> UnzipData(byte[] zipData)
+        public static Dictionary<string, string> UnzipData(byte[] zipData, Encoding encoding = null)
         {
             // Initialize:
             var data = new Dictionary<string, string>();
@@ -217,7 +213,7 @@ namespace QuantConnect
                                 zipStream.Read(buffer, 0, (int)entry.Size);
 
                                 //Save into array:
-                                data.Add(entry.Name, buffer.GetString());
+                                data.Add(entry.Name, buffer.GetString(encoding));
                             }
                             else
                             {
@@ -243,17 +239,19 @@ namespace QuantConnect
         /// <returns>The zipped file as a byte array</returns>
         public static byte[] ZipBytes(byte[] bytes, string zipEntryName)
         {
-            var memoryStream = new MemoryStream();
-            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
+            using (var memoryStream = new MemoryStream())
             {
-                var entry = archive.CreateEntry(zipEntryName);
-                using (var entryStream = entry.Open())
+                using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
                 {
-                    entryStream.Write(bytes, 0, bytes.Length);
+                    var entry = archive.CreateEntry(zipEntryName);
+                    using (var entryStream = entry.Open())
+                    {
+                        entryStream.Write(bytes, 0, bytes.Length);
+                    }
                 }
+                // 'ToArray' after disposing of 'ZipArchive' since it finishes writing all the data
+                return memoryStream.ToArray();
             }
-
-            return memoryStream.ToArray();
         }
 
         /// <summary>
@@ -626,9 +624,11 @@ namespace QuantConnect
         {
             using (var entryReader = new StreamReader(entry.OpenReader()))
             {
-                while (!entryReader.EndOfStream)
+                var line = entryReader.ReadLine();
+                while (line != null)
                 {
-                    yield return entryReader.ReadLine();
+                    yield return line;
+                    line = entryReader.ReadLine();
                 }
             }
         }

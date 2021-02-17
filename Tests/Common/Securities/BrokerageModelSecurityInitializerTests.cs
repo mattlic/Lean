@@ -73,7 +73,9 @@ namespace QuantConnect.Tests.Common.Securities
                     new SingleEntryDataCacheProvider(new DefaultDataProvider()),
                     new LocalDiskMapFileProvider(),
                     new LocalDiskFactorFileProvider(),
-                    null
+                    null,
+                    true,
+                    new DataPermissionManager()
                 )
             );
 
@@ -85,7 +87,8 @@ namespace QuantConnect.Tests.Common.Securities
                 new Cash(Currencies.USD, 0, 1m),
                 SymbolProperties.GetDefault(Currencies.USD),
                 ErrorCurrencyConverter.Instance,
-                RegisteredSecurityDataTypesProvider.Null
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
             );
 
             _quoteBarSecurity = new Security(
@@ -94,7 +97,8 @@ namespace QuantConnect.Tests.Common.Securities
                 new Cash(Currencies.USD, 0, 1m),
                 SymbolProperties.GetDefault(Currencies.USD),
                 ErrorCurrencyConverter.Instance,
-                RegisteredSecurityDataTypesProvider.Null
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
             );
 
             _brokerageInitializer = new BrokerageModelSecurityInitializer(new DefaultBrokerageModel(),

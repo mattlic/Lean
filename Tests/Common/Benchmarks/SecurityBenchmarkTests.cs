@@ -22,7 +22,7 @@ using QuantConnect.Securities;
 
 namespace QuantConnect.Tests.Common.Benchmarks
 {
-    [TestFixture]
+    [TestFixture, Parallelizable(ParallelScope.All)]
     public class SecurityBenchmarkTests
     {
         [TestCase(1)]
@@ -40,7 +40,8 @@ namespace QuantConnect.Tests.Common.Benchmarks
                 new Cash(Currencies.USD, 0, conversionRate),
                 SymbolProperties.GetDefault(Currencies.USD),
                 ErrorCurrencyConverter.Instance,
-                RegisteredSecurityDataTypesProvider.Null
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
             );
             var price = 25;
             security.SetMarketPrice(new Tick { Value = price });

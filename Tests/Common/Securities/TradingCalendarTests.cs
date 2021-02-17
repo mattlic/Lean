@@ -43,7 +43,8 @@ namespace QuantConnect.Tests.Common.Securities
                     new Cash(Currencies.USD, 0, 1m),
                     SymbolProperties.GetDefault(Currencies.USD),
                     ErrorCurrencyConverter.Instance,
-                    RegisteredSecurityDataTypesProvider.Null
+                    RegisteredSecurityDataTypesProvider.Null,
+                    new SecurityCache()
                 )
             );
             securities[Symbols.SPY].SetMarketPrice(new TradeBar { Time = securities.UtcTime, Symbol = Symbols.SPY, Close = 195 });
@@ -74,7 +75,7 @@ namespace QuantConnect.Tests.Common.Securities
                 )
             );
 
-            var future1= Symbol.CreateFuture("ES", Market.USA, new DateTime(2016, 02, 16));
+            var future1= Symbol.CreateFuture(QuantConnect.Securities.Futures.Indices.SP500EMini, Market.CME, new DateTime(2016, 02, 16));
             securities.Add(
                 future1,
                 new Future(
@@ -87,7 +88,7 @@ namespace QuantConnect.Tests.Common.Securities
                 )
             );
 
-            var future2 = Symbol.CreateFuture("ES", Market.USA, new DateTime(2016, 02, 19));
+            var future2 = Symbol.CreateFuture(QuantConnect.Securities.Futures.Indices.SP500EMini, Market.CME, new DateTime(2016, 02, 19));
             securities.Add(
                 future2,
                 new Future(

@@ -14,6 +14,7 @@
 */
 
 using QuantConnect.Securities;
+using System.Collections.Generic;
 
 namespace QuantConnect.Orders.Slippage
 {
@@ -22,7 +23,7 @@ namespace QuantConnect.Orders.Slippage
     /// </summary>
     public class AlphaStreamsSlippageModel : ISlippageModel
     {
-        private const decimal _slippagePercent = 0.001m;
+        private const decimal _slippagePercent = 0.0001m;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AlphaStreamsSlippageModel"/> class
@@ -38,6 +39,7 @@ namespace QuantConnect.Orders.Slippage
             {
                 return 0;
             }
+
             return _slippagePercent * asset.GetLastData()?.Value ?? 0;
         }
     }

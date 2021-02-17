@@ -29,7 +29,7 @@ using QuantConnect.Tests.Engine;
 
 namespace QuantConnect.Tests.Common.Orders.Fills
 {
-    [TestFixture, Ignore]
+    [TestFixture, Ignore("TODO: fix me")]
     public class PartialMarketFillModelTests
     {
         [Test]
@@ -104,7 +104,8 @@ namespace QuantConnect.Tests.Common.Orders.Fills
                 new Cash(Currencies.USD, 0, 1m),
                 SymbolProperties.GetDefault(Currencies.USD),
                 ErrorCurrencyConverter.Instance,
-                RegisteredSecurityDataTypesProvider.Null
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
             );
 
             model = new PartialMarketFillModel(algorithm.Transactions, 2);

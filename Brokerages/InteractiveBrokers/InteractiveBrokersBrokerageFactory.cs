@@ -16,8 +16,10 @@
 using System;
 using System.Collections.Generic;
 using QuantConnect.Configuration;
+using QuantConnect.Data;
 using QuantConnect.Interfaces;
 using QuantConnect.Packets;
+using QuantConnect.Securities;
 using QuantConnect.Util;
 
 namespace QuantConnect.Brokerages.InteractiveBrokers
@@ -54,7 +56,8 @@ namespace QuantConnect.Brokerages.InteractiveBrokers
         /// <summary>
         /// Gets a new instance of the <see cref="InteractiveBrokersBrokerageModel"/>
         /// </summary>
-        public override IBrokerageModel BrokerageModel => new InteractiveBrokersBrokerageModel();
+        /// <param name="orderProvider">The order provider</param>
+        public override IBrokerageModel GetBrokerageModel(IOrderProvider orderProvider) => new InteractiveBrokersBrokerageModel();
 
         /// <summary>
         /// Creates a new IBrokerage instance and set ups the environment for the brokerage
@@ -93,6 +96,8 @@ namespace QuantConnect.Brokerages.InteractiveBrokers
                 algorithm,
                 algorithm.Transactions,
                 algorithm.Portfolio,
+                Composer.Instance.GetExportedValueByTypeName<IDataAggregator>(Config.Get("data-aggregator", "QuantConnect.Lean.Engine.DataFeeds.AggregationManager")),
+                Composer.Instance.GetExportedValueByTypeName<IMapFileProvider>(Config.Get("map-file-provider", "QuantConnect.Data.Auxiliary.LocalDiskMapFileProvider")),
                 account,
                 host,
                 port,

@@ -48,6 +48,15 @@ namespace QuantConnect.Securities
         // using concurrent bag to avoid list enumeration threading issues
         protected readonly ConcurrentBag<SubscriptionDataConfig> SubscriptionsBag;
 
+        protected IShortableProvider ShortableProvider { get; private set; }
+
+        /// <summary>
+        /// A null security leverage value
+        /// </summary>
+        /// <remarks>This value is used to determine when the
+        /// <see cref="SecurityInitializer"/> leverage is used</remarks>
+        public const decimal NullLeverage = 0;
+
         /// <summary>
         /// Gets all the subscriptions for this security
         /// </summary>
@@ -277,13 +286,14 @@ namespace QuantConnect.Securities
             Cash quoteCurrency,
             SymbolProperties symbolProperties,
             ICurrencyConverter currencyConverter,
-            IRegisteredSecurityDataTypesProvider registeredTypesProvider
+            IRegisteredSecurityDataTypesProvider registeredTypesProvider,
+            SecurityCache cache
             )
             : this(config,
                 quoteCurrency,
                 symbolProperties,
                 new SecurityExchange(exchangeHours),
-                new SecurityCache(),
+                cache,
                 new SecurityPortfolioModel(),
                 new ImmediateFillModel(),
                 new InteractiveBrokersFeeModel(),
@@ -307,13 +317,14 @@ namespace QuantConnect.Securities
             Cash quoteCurrency,
             SymbolProperties symbolProperties,
             ICurrencyConverter currencyConverter,
-            IRegisteredSecurityDataTypesProvider registeredTypesProvider
+            IRegisteredSecurityDataTypesProvider registeredTypesProvider,
+            SecurityCache cache
             )
             : this(symbol,
                 quoteCurrency,
                 symbolProperties,
                 new SecurityExchange(exchangeHours),
-                new SecurityCache(),
+                cache,
                 new SecurityPortfolioModel(),
                 new ImmediateFillModel(),
                 new InteractiveBrokersFeeModel(),
@@ -379,8 +390,7 @@ namespace QuantConnect.Securities
             SettlementModel = settlementModel;
             VolatilityModel = volatilityModel;
             Holdings = new SecurityHolding(this, currencyConverter);
-            Data = new DynamicSecurityData(registeredTypesProvider);
-            Cache.DataStored += (sender, args) => Data.StoreData(args.DataType, args.Data);
+            Data = new DynamicSecurityData(registeredTypesProvider, Cache);
 
             UpdateSubscriptionProperties();
         }
@@ -482,7 +492,7 @@ namespace QuantConnect.Securities
         /// <summary>
         /// If this uses tradebar data, return the most recent open.
         /// </summary>
-        public virtual decimal Open => Cache.Open == 0 ? Price: Cache.Open;
+        public virtual decimal Open => Cache.Open == 0 ? Price : Cache.Open;
 
         /// <summary>
         /// Access to the volume of the equity today
@@ -581,9 +591,7 @@ namespace QuantConnect.Securities
             if (data == null) return;
             Cache.AddData(data);
 
-            if (data is OpenInterest || data.Price == 0m) return;
-            Holdings.UpdateMarketPrice(Price);
-            VolatilityModel.Update(this, data);
+            UpdateConsumersMarketPrice(data);
         }
 
         /// <summary>
@@ -591,31 +599,14 @@ namespace QuantConnect.Securities
         /// on the data provided. Data is also stored into the security's data cache
         /// </summary>
         /// <param name="data">The security update data</param>
-        public void Update(IEnumerable<BaseData> data)
+        /// <param name="dataType">The data type</param>
+        /// <param name="containsFillForwardData">Flag indicating whether
+        /// <paramref name="data"/> contains any fill forward bar or not</param>
+        public void Update(IReadOnlyList<BaseData> data, Type dataType, bool? containsFillForwardData = null)
         {
-            foreach (var grp in data.GroupBy(d => d.GetType()))
-            {
-                // use the last of each type to set market price
-                SetMarketPrice(grp.Last());
+            Cache.AddDataList(data, dataType, containsFillForwardData);
 
-                // maintaining regression requires us to NOT cache FF data
-                var nonFillForward = grp.Where(d => !d.IsFillForward).ToList();
-                Cache.StoreData(nonFillForward.ToList());
-            }
-        }
-
-        /// <summary>
-        /// Update any security properties based on the latest realtime data and time
-        /// </summary>
-        /// <param name="data">New data packet from LEAN</param>
-        public void SetRealTimePrice(BaseData data)
-        {
-            //Add new point to cache:
-            if (data == null) return;
-            Cache.AddData(data);
-
-            if (data is OpenInterest || data.Price == 0m) return;
-            Holdings.UpdateMarketPrice(Price);
+            UpdateConsumersMarketPrice(data[data.Count - 1]);
         }
 
         /// <summary>
@@ -640,7 +631,8 @@ namespace QuantConnect.Securities
         public void SetLeverage(decimal leverage)
         {
             if (Symbol.ID.SecurityType == SecurityType.Future ||
-                Symbol.ID.SecurityType == SecurityType.Option)
+                Symbol.ID.SecurityType == SecurityType.Option ||
+                Symbol.ID.SecurityType == SecurityType.FutureOption)
                 return;
 
             BuyingPowerModel.SetLeverage(this, leverage);
@@ -781,6 +773,11 @@ namespace QuantConnect.Securities
             SetMarginModel(new BuyingPowerModelPythonWrapper(pyObject));
         }
 
+        public void SetShortableProvider(IShortableProvider shortableProvider)
+        {
+            ShortableProvider = shortableProvider;
+        }
+
         /// <summary>
         /// Returns a string that represents the current object.
         /// </summary>
@@ -818,6 +815,13 @@ namespace QuantConnect.Securities
                 SubscriptionsBag.Add(subscription);
             }
             UpdateSubscriptionProperties();
+        }
+
+        private void UpdateConsumersMarketPrice(BaseData data)
+        {
+            if (data is OpenInterest || data.Price == 0m) return;
+            Holdings.UpdateMarketPrice(Price);
+            VolatilityModel.Update(this, data);
         }
 
         private void UpdateSubscriptionProperties()

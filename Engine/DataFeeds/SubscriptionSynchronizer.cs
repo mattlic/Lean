@@ -91,11 +91,11 @@ namespace QuantConnect.Lean.Engine.DataFeeds
                 var changes = SecurityChanges.None;
                 var data = new List<DataFeedPacket>(1);
                 // NOTE: Tight coupling in UniverseSelection.ApplyUniverseSelection
-                var universeData = new Dictionary<Universe, BaseDataCollection>();
+                Dictionary<Universe, BaseDataCollection> universeData = null; // lazy construction for performance
                 var universeDataForTimeSliceCreate = new Dictionary<Universe, BaseDataCollection>();
 
-                _frontierTimeProvider.SetCurrentTimeUtc(_timeProvider.GetUtcNow());
-                var frontierUtc = _frontierTimeProvider.GetUtcNow();
+                var frontierUtc = _timeProvider.GetUtcNow();
+                _frontierTimeProvider.SetCurrentTimeUtc(frontierUtc);
 
                 SecurityChanges newChanges;
                 do
@@ -158,7 +158,8 @@ namespace QuantConnect.Lean.Engine.DataFeeds
                                     : packetBaseDataCollection.Data;
 
                                 BaseDataCollection collection;
-                                if (universeData.TryGetValue(subscription.Universes.Single(), out collection))
+                                if (universeData != null
+                                    && universeData.TryGetValue(subscription.Universes.Single(), out collection))
                                 {
                                     collection.Data.AddRange(packetData);
                                 }
@@ -175,9 +176,13 @@ namespace QuantConnect.Lean.Engine.DataFeeds
                                     }
                                     else
                                     {
-                                        collection = new BaseDataCollection(frontierUtc, subscription.Configuration.Symbol, packetData);
+                                        collection = new BaseDataCollection(frontierUtc, frontierUtc, subscription.Configuration.Symbol, packetData);
                                     }
 
+                                    if (universeData == null)
+                                    {
+                                        universeData = new Dictionary<Universe, BaseDataCollection>();
+                                    }
                                     universeData[subscription.Universes.Single()] = collection;
                                 }
                             }
@@ -186,26 +191,38 @@ namespace QuantConnect.Lean.Engine.DataFeeds
                         if (subscription.IsUniverseSelectionSubscription
                             && subscription.Universes.Single().DisposeRequested)
                         {
+                            var universe = subscription.Universes.Single();
+                            // check if a universe selection isn't already scheduled for this disposed universe
+                            if (universeData == null || !universeData.ContainsKey(universe))
+                            {
+                                if (universeData == null)
+                                {
+                                    universeData = new Dictionary<Universe, BaseDataCollection>();
+                                }
+                                // we force trigger one last universe selection for this disposed universe, so it deselects all subscriptions it added
+                                universeData[universe] = new BaseDataCollection(frontierUtc, subscription.Configuration.Symbol);
+                            }
+
                             // we need to do this after all usages of subscription.Universes
                             OnSubscriptionFinished(subscription);
                         }
                     }
 
-                    if (universeData.Any())
+                    if (universeData != null && universeData.Count > 0)
                     {
                         // if we are going to perform universe selection we emit an empty
                         // time pulse to align algorithm time with current frontier
                         yield return _timeSliceFactory.CreateTimePulse(frontierUtc);
-                    }
 
-                    foreach (var kvp in universeData)
-                    {
-                        var universe = kvp.Key;
-                        var baseDataCollection = kvp.Value;
-                        universeDataForTimeSliceCreate[universe] = baseDataCollection;
-                        newChanges += _universeSelection.ApplyUniverseSelection(universe, frontierUtc, baseDataCollection);
+                        foreach (var kvp in universeData)
+                        {
+                            var universe = kvp.Key;
+                            var baseDataCollection = kvp.Value;
+                            universeDataForTimeSliceCreate[universe] = baseDataCollection;
+                            newChanges += _universeSelection.ApplyUniverseSelection(universe, frontierUtc, baseDataCollection);
+                        }
+                        universeData.Clear();
                     }
-                    universeData.Clear();
 
                     changes += newChanges;
                 }
@@ -232,8 +249,7 @@ namespace QuantConnect.Lean.Engine.DataFeeds
         /// </summary>
         protected virtual void OnSubscriptionFinished(Subscription subscription)
         {
-            var handler = SubscriptionFinished;
-            if (handler != null) handler(this, subscription);
+            SubscriptionFinished?.Invoke(this, subscription);
         }
 
         /// <summary>

@@ -17,7 +17,6 @@ using System.Collections.Generic;
 using QuantConnect.Data.Market;
 using QuantConnect.Orders;
 using QuantConnect.Orders.Fees;
-using QuantConnect.Orders.Fills;
 using QuantConnect.Orders.Slippage;
 using QuantConnect.Securities;
 using QuantConnect.Securities.Equity;
@@ -160,23 +159,14 @@ namespace QuantConnect.Brokerages
         }
 
         /// <summary>
-        /// Gets a new fill model that represents this brokerage's fill behavior
-        /// </summary>
-        /// <param name="security">The security to get fill model for</param>
-        /// <returns>The new fill model for this brokerage</returns>
-        public override IFillModel GetFillModel(Security security)
-        {
-            return new ImmediateFillModel();
-        }
-
-        /// <summary>
         /// Gets a new fee model that represents this brokerage's fee structure
         /// </summary>
         /// <param name="security">The security to get a fee model for</param>
         /// <returns>The new fee model for this brokerage</returns>
         public override IFeeModel GetFeeModel(Security security)
         {
-            return new ConstantFeeModel(1m);
+            // Trading stocks at Tradier Brokerage is free
+            return new ConstantFeeModel(0m);
         }
 
         /// <summary>
